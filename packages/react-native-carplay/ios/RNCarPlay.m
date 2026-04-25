@@ -1375,12 +1375,26 @@ RCT_EXPORT_METHOD(updateMapTemplateMapButtons:(NSString*) templateId mapButtons:
 }
 
 - (void)sendTemplateEventWithName:(CPTemplate *)template name:(NSString*)name json:(NSDictionary*)json {
-    NSMutableDictionary *body = [[NSMutableDictionary alloc] initWithDictionary:json];
-    NSDictionary *userInfo = [template userInfo];
-    [body setObject:[userInfo objectForKey:@"templateId"] forKey:@"templateId"];
-    if (hasListeners) {
-        [self sendEventWithName:name body:body];
+  //    NSMutableDictionary *body = [[NSMutableDictionary alloc] initWithDictionary:json];
+  //    NSDictionary *userInfo = [template userInfo];
+  //    [body setObject:[userInfo objectForKey:@"templateId"] forKey:@"templateId"];
+  //    if (hasListeners) {
+  //        [self sendEventWithName:name body:body];
+  //    }
+  
+  NSMutableDictionary *body = [[NSMutableDictionary alloc] initWithDictionary:json];
+  
+  NSDictionary *userInfo = [template userInfo];
+  if ([userInfo isKindOfClass:[NSDictionary class]]) {
+    NSString *templateId = userInfo[@"templateId"];
+    if (templateId) {
+      body[@"templateId"] = templateId;
     }
+  }
+  
+  if (hasListeners) {
+    [self sendEventWithName:name body:body];
+  }
 }
 
 
