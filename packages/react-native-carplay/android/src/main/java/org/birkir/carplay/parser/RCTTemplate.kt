@@ -151,11 +151,12 @@ abstract class RCTTemplate(
     type: String = "row"
   ): ItemList {
     return ItemList.Builder().apply {
-      for (i in 0 until items!!.size()) {
-        if (type == "row") {
-          addItem(parseRowItem(items.getMap(i), i))
-        } else if (type == "grid") {
-          addItem(parseGridItem(items.getMap(i), i))
+      if (items == null) return@apply
+      for (i in 0 until items.size()) {
+        val item = items.getMap(i) ?: continue
+        when (type) {
+          "row" -> addItem(parseRowItem(item, i))
+          "grid" -> addItem(parseGridItem(item, i))
         }
       }
     }.build()
@@ -180,28 +181,39 @@ abstract class RCTTemplate(
 
   protected fun parseGridItem(item: ReadableMap, index: Int): GridItem {
     val id = item.getString("id") ?: index.toString()
-    return GridItem.Builder().apply {
-      val titleVariants = item.getArray("titleVariants")
-      val metadata = item.getMap("metadata");
 
-      if (titleVariants != null) {
-        if (titleVariants.size() > 0) {
-          setTitle(parseCarText(
-            titleVariants.getString(0),
-            metadata
-          ))
+    return GridItem.Builder().apply {
+
+        val titleVariants = item.getArray("titleVariants")
+        val metadata = item.getMap("metadata")
+
+        titleVariants?.let { arr ->
+
+            // title
+            val title = arr.getString(0)
+            if (!title.isNullOrEmpty()) {
+                setTitle(parseCarText(title, metadata))
+            }
+
+            // subtitle
+            val subtitle = arr.getString(1)
+            if (!subtitle.isNullOrEmpty()) {
+                setText(subtitle)
+            }
         }
-        if (titleVariants.size() > 1) {
-          setText(titleVariants.getString(1))
+
+        item.getMap("image")?.let {
+            setImage(parseCarIcon(it))
         }
-      }
-      item.getMap("image")?.let { setImage(parseCarIcon(it)) }
-      setLoading(item.isLoading())
-      setOnClickListener {
-        eventEmitter.gridButtonPressed(id, index)
-      }
+
+        setLoading(item.isLoading())
+
+        setOnClickListener {
+            eventEmitter.gridButtonPressed(id, index)
+        }
+
     }.build()
-  }
+}
 
   fun parsePlace(props: ReadableMap): Place {
     val builder = Place.Builder(
@@ -251,32 +263,48 @@ abstract class RCTTemplate(
 
   protected fun buildRow(props: ReadableMap): Row {
     val builder = Row.Builder()
-    builder.setTitle(
-      parseCarText(
-        props.getString("title")!!,
-        props.getMap("metadata")
-      )
-    )
-    props.getArray("texts")?.let {
-      for (i in 0 until it.size()) {
-        builder.addText(it.getString(i))
-      }
+
+    // ✅ title（必须防 null）
+    val title = props.getString("title")
+    if (!title.isNullOrEmpty()) {
+        builder.setTitle(
+            parseCarText(title, props.getMap("metadata"))
+        )
+    } else {
+        builder.setTitle(" ") // CarPlay 不允许空 title
     }
+
+    // ✅ texts
+    props.getArray("texts")?.let { arr ->
+        for (i in 0 until arr.size()) {
+            val text = arr.getString(i)
+            if (!text.isNullOrEmpty()) {
+                builder.addText(text)
+            }
+        }
+    }
+
+    // ✅ image
     props.getMap("image")?.let {
-      builder.setImage(parseCarIcon(it))
+        builder.setImage(parseCarIcon(it))
     }
-    try {
-      val onPress = props.getInt("onPress")
-      builder.setBrowsable(true)
-//      builder.setOnClickListener { invokeCallback(onPress) }
-    } catch (e: Exception) {
-      Log.w(TAG, "buildRow: failed to set clickListener on the row")
+
+    // ✅ onPress（不用 try-catch）
+    if (props.hasKey("onPress") && !props.isNull("onPress")) {
+        val onPress = props.getInt("onPress")
+        builder.setBrowsable(true)
+
+        // 如果你后面要接事件：
+        // builder.setOnClickListener { invokeCallback(onPress) }
     }
+
+    // ✅ metadata
     parseMetadata(props.getMap("metadata"))?.let {
-      builder.setMetadata(it)
+        builder.setMetadata(it)
     }
+
     return builder.build()
-  }
+}
 
   protected fun parseDistanceUnit(value: String?): Int {
     return when (value) {
@@ -295,20 +323,30 @@ abstract class RCTTemplate(
 
   protected fun parsePane(item: ReadableMap): Pane {
     return Pane.Builder().apply {
-      setLoading(item.isLoading())
-      item.getMap("image")?.let {
-        setImage(parseCarIcon(it))
-      }
-      item.getArray("actions")?.let {
-        for (i in 0 until it.size()) {
-          addAction(parseAction(it.getMap(i)))
+
+        setLoading(item.isLoading())
+
+        // image
+        item.getMap("image")?.let {
+            setImage(parseCarIcon(it))
         }
-      }
-      item.getArray("items")?.let {
-        for (i in 0 until it.size()) {
-          addRow(parseRowItem(it.getMap(i), i))
+
+        // actions
+        item.getArray("actions")?.let { arr ->
+            for (i in 0 until arr.size()) {
+                val actionMap = arr.getMap(i) ?: continue
+                addAction(parseAction(actionMap))
+            }
         }
-      }
+
+        // items
+        item.getArray("items")?.let { arr ->
+            for (i in 0 until arr.size()) {
+                val rowMap = arr.getMap(i) ?: continue
+                addRow(parseRowItem(rowMap, i))
+            }
+        }
+
     }.build()
   }
 
